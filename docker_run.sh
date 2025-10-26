@@ -1,6 +1,1 @@
-docker run -it \
-    --name unet_chlee \
-    --shm-size 2g \
-    -v ./:/workspace \
-    unet_chlee \
-    /bin/bash
+docker run -it --rm --shm-size=2g -v ./:/workspace --name unet_chlee unet_chlee /bin/bash

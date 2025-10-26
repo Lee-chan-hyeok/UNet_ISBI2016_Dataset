@@ -1,0 +1,20 @@
+save_path = "origin"
+
+epochs = 100
+batch_size = 1
+lr = 0.0001
+device = "cpu"
+workers = 0
+images = "./data"
+weights = "./weights"
+logs = "./logs"
+validation_cases = 10
+seed = 42
+sampling_fraction = 0.1
+aug_scale = 0.05
+aug_angle = 15
+vis_images = 10
+vis_freq = 5
+
+patience = 0
+early_stopping = 10

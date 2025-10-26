@@ -5,21 +5,64 @@ from torchinfo import summary
 from torch.utils.data import DataLoader
 import numpy as np
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 import config as config
 from unet import ChleeUNet
 from dataset import ISICDataset
 from transform import transforms
-from loss import DiceLoss
+# from loss import DiceLoss
+
 from utils import dsc
 
 
+def save_loss_dsc_graph(
+        train_loss_list: list,
+        valid_loss_list: list,
+        train_dsc_list: list,
+        valid_dsc_list: list,
+        model_save_path: str,
+
+    ):
+    epochs = range(1, len(train_loss_list)+1)
+
+    plt.figure(figsize=(12, 5))
+    
+    # loss
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, train_loss_list, label="Train Loss")
+    plt.plot(epochs, valid_loss_list, label="Valid Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Loss Graph")
+    plt.legend()
+    plt.grid(True)
+
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs, train_dsc_list, label="Train Dice Score")
+    plt.plot(epochs, valid_dsc_list, label="Valid Dice Score")
+    plt.xlabel("Epoch")
+    plt.ylabel("Dice Score")
+    plt.title("Dice Score Graph")
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
+
+    save_path = os.path.join(model_save_path, "loss_dsc_graph.png")
+    plt.savefig(save_path)
+    plt.close()
+
+    logging.info(f"Loss and Dice Score Greph is saved at {save_path}!")
+
+
+
+
 def run_epoch(
-        cfg: config,
         model: ChleeUNet,
         data_loader: dict,
         optimizer: torch.optim,
-        loss_fn: DiceLoss,
+        loss_fn: torch.nn.BCELoss,
         epoch: int,
         device,
     ):
@@ -54,7 +97,7 @@ def run_epoch(
 
     mean_train_epoch_loss = np.mean(train_epoch_loss)   # 평균 train loss 값
     mean_train_epoch_dsc = np.mean(train_epoch_dsc)
-    print(f"Epoch {epoch+1} | Train Loss: {mean_train_epoch_loss:.4f}")
+    print(f"Epoch {epoch+1} | Train Loss: {mean_train_epoch_loss:.4f} | Train DSC: {mean_train_epoch_dsc:.4f}")
 
     # ========================= valid =========================
     model.eval()
@@ -101,7 +144,7 @@ def run_epoch(
 
 def main():
     cfg = config
-    model_save_path = os.path.join("checkpoint", cfg.save_path)
+    model_save_path = os.path.join("checkpoint", cfg.save_path)     # model_save_path = "checkpoint/origin"
     os.makedirs(model_save_path, exist_ok=True)
 
     # ================ 로그 파일 + 화면 출력 설정 ================
@@ -119,7 +162,7 @@ def main():
     # =========================================================
 
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')   # device = cpu
     logging.info(f"device: {device}")
 
     # model 초기화
@@ -131,6 +174,7 @@ def main():
     train_dataset = ISICDataset(
         images_dir=cfg.images,
         transform=transforms(scale=cfg.aug_scale, angle=cfg.aug_angle, flip_prob=0.5),
+        image_size=(572, 572),
         subset="train",
         validation_cases=cfg.validation_cases,
         seed=cfg.seed,
@@ -139,6 +183,7 @@ def main():
     valid_dataset = ISICDataset(
         images_dir=cfg.images,
         transform=None,
+        image_size=(572, 572),
         subset="validation",
         validation_cases=cfg.validation_cases,
         seed=cfg.seed,
@@ -172,11 +217,13 @@ def main():
 
     # optimizer, loss 초기화
     optimizer = torch.optim.Adam(params=model.parameters(), lr=cfg.lr)
-    loss_fn = DiceLoss()
+    # loss_fn = DiceLoss()
+    # loss_fn = torch.nn.BCELoss()
+    loss_fn = torch.nn.BCEWithLogitsLoss()
 
     best_validation_dsc = 0.0
     
-    patience = cfg.patience,
+    patience = cfg.patience
     early_stopping = cfg.early_stopping
     
     train_loss_list, valid_loss_list = [], []
@@ -184,7 +231,6 @@ def main():
     lr_list = []
     for epoch in range(cfg.epochs):
         loss_dict, dsc_dict = run_epoch(
-            cfg,
             model,
             loader_dict,
             optimizer,
@@ -210,16 +256,13 @@ def main():
         else:
             patience += 1
             if patience >= early_stopping:
-                logging.info(f"----- Save best.pt model !!! -----")
+                logging.info(f"----- Early Stopping !!! -----")
                 break
 
-        
+        if (epoch+1) % 5 == 0:
+            save_loss_dsc_graph(train_loss_list, valid_loss_list, train_dsc_list, valid_dsc_list, model_save_path)
 
-
-
-
-
-
+    save_loss_dsc_graph(train_loss_list, valid_loss_list, train_dsc_list, valid_dsc_list, model_save_path)
 
 
 if __name__ == "__main__":

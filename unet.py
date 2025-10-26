@@ -43,7 +43,7 @@ class Encoder(nn.Module):
         return conv_out, pooled
 
 
-class Up(nn.Module):
+class Decoder(nn.Module):
     """
     ConvTranspose2d -> Crop & Concat -> DoubleConv
     """
@@ -114,10 +114,10 @@ class ChleeUNet(nn.Module):
         self.bottleneck = DoubleConv(hidden_channel*8, hidden_channel*16) # 512 -> 1024
         
         # --- 확장 경로 (Decoder) ---
-        self.up1 = Up(hidden_channel*16, hidden_channel*8) # 1024 -> 512
-        self.up2 = Up(hidden_channel*8, hidden_channel*4) # 512 -> 256
-        self.up3 = Up(hidden_channel*4, hidden_channel*2) # 256 -> 128
-        self.up4 = Up(hidden_channel*2, hidden_channel) # 128 -> 64
+        self.up1 = Decoder(hidden_channel*16, hidden_channel*8) # 1024 -> 512
+        self.up2 = Decoder(hidden_channel*8, hidden_channel*4) # 512 -> 256
+        self.up3 = Decoder(hidden_channel*4, hidden_channel*2) # 256 -> 128
+        self.up4 = Decoder(hidden_channel*2, hidden_channel) # 128 -> 64
 
         # --- 최종 출력 (Output) ---
         self.out_conv = nn.Conv2d(hidden_channel, out_channel, kernel_size=1)

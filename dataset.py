@@ -25,29 +25,27 @@ class ISICDataset(Dataset):  # <--- [4] 수정: 클래스명 변경
 
     def __init__(
         self,
-        images_dir,  # (이것을 ISIC 데이터의 'root_dir'로 사용)
-        transform=None,  # (데이터 증강, train.py에서 전달)
-        image_size=256,  # (이 매개변수는 사용되지 않음, (572, 388)로 고정)
+        images_dir,             # dataset root_dir
+        transform=None,         # Augmentation
+        image_size=(572, 572),         # (이 매개변수는 사용되지 않음, (572, 388)로 고정)
         subset="train",
-        random_sampling=True, # (이 매개변수는 사용되지 않음)
-        validation_cases=10,
+        validation_cases=10,    # validation dataset 개수
         seed=42,
-        sampling_fraction=1.0,
+        sampling_fraction=1.0,  # train dataset sampling 비율
     ):
         assert subset in ["all", "train", "validation"]
 
-        # --- [5] 수정: ISIC 데이터셋 경로 및 로직으로 전체 변경 ---
         root_dir = Path(images_dir)
         self.image_dir = root_dir / "ISBI2016_ISIC_Part1_Training_Data"
         self.mask_dir = root_dir / "ISBI2016_ISIC_Part1_Training_GroundTruth"
         self.transform = transform
 
-        # 1. 모든 JPG 파일 경로를 찾습니다.
+        # 1. 이미지 파일 경로
         all_image_files = sorted(list(self.image_dir.glob("*.jpg")))
         if not all_image_files:
             raise FileNotFoundError(f".jpg 이미지를 찾을 수 없습니다: {self.image_dir}")
 
-        # 2. 짝이 맞는 마스크(.png)가 있는지 확인하고 리스트를 생성합니다.
+        # 2. 이미지 파일 이름과 짝이 맞는 mask 찾기
         all_mask_files = []
         valid_image_files = []
         for img_path in all_image_files:
@@ -99,7 +97,7 @@ class ISICDataset(Dataset):  # <--- [4] 수정: 클래스명 변경
         print(f"'{subset}' 데이터셋 로드 완료. 파일 개수: {len(self.image_files)}개")
 
         # 5. 필요한 Transform들을 정의합니다. (Lazy Loading용)
-        self.input_shape = (572, 572)
+        self.input_shape = image_size
         self.output_shape = (388, 388)
 
         # 이미지용: (572, 572)로 리사이즈

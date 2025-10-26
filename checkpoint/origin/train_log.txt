@@ -1,0 +1,19 @@
+2025-10-26 07:08:36,358 - device: cpu
+2025-10-26 07:08:49,478 - device: cpu
+2025-10-26 08:37:49,889 - device: cpu
+2025-10-26 08:38:45,988 - device: cpu
+2025-10-26 08:40:03,025 - device: cpu
+2025-10-26 08:40:58,929 - device: cpu
+2025-10-26 08:51:05,090 - device: cpu
+2025-10-26 08:51:25,684 - device: cpu
+2025-10-26 09:01:07,847 - ----- Save best.pt model !!! -----
+2025-10-26 09:19:58,917 - ----- Save best.pt model !!! -----
+2025-10-26 09:38:51,732 - ----- Save best.pt model !!! -----
+2025-10-26 10:26:39,176 - device: cpu
+2025-10-26 11:25:57,512 - device: cpu
+2025-10-26 11:28:43,015 - device: cpu
+2025-10-26 11:33:29,761 - ----- Save best.pt model !!! -----
+2025-10-26 11:38:13,675 - ----- Save best.pt model !!! -----
+2025-10-26 11:42:54,811 - ----- Save best.pt model !!! -----
+2025-10-26 11:47:34,585 - ----- Save best.pt model !!! -----
+2025-10-26 11:52:26,071 - Loss and Dice Score Greph is saved at checkpoint/origin/loss_dsc_graph.png!

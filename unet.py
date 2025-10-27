@@ -5,10 +5,6 @@ import torch.nn as nn
 # 1. 기본 블록 (벽돌)
 # ---------------------------------------------------------------------------
 class DoubleConv(nn.Module):
-    """
-    (3x3 Conv + BatchNorm + ReLU) * 2
-    논문 스타일의 padding=0 (Valid Convolution) 사용
-    """
     def __init__(self, in_channel, out_channel):
         super().__init__()
         self.double_conv = nn.Sequential(
@@ -34,25 +30,20 @@ class Encoder(nn.Module):
     """
     def __init__(self, in_channel, out_channel):
         super().__init__()
-        self.conv = DoubleConv(in_channel, out_channel)
+        self.double_conv = DoubleConv(in_channel, out_channel)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
     def forward(self, x):
-        conv_out = self.conv(x)  # <-- 스킵 연결용
-        pooled = self.pool(conv_out)
-        return conv_out, pooled
+        double_conv_out = self.double_conv(x)  # skip connection꺼
+        pool_out = self.pool(double_conv)
+        return double_conv_out, pool_out
 
 
 class Decoder(nn.Module):
-    """
-    ConvTranspose2d -> Crop & Concat -> DoubleConv
-    """
     def __init__(self, in_channel, out_channel):
         super().__init__()
-        # 업샘플링: 채널은 절반(in_channel -> out_channel), 크기는 2배
+
         self.up_conv = nn.ConvTranspose2d(in_channel, out_channel, kernel_size=2, stride=2)
-        
-        # Concat 이후: (스킵 채널 + 업샘플링 채널) = out_channel * 2
         self.double_conv = DoubleConv(out_channel * 2, out_channel)
 
     def crop_center(self, enc_feat, dec_feat):
@@ -96,49 +87,36 @@ class ChleeUNet(nn.Module):
     def __init__(self, in_channel=3, hidden_channel=64, out_channel=1):
         super().__init__()
 
-        # --- 수축 경로 (Encoder) ---
-        # (B, 3, H, W)
+        # Contracting path
         self.encoder1 = Encoder(in_channel, hidden_channel) # 3 -> 64
-        # (B, 64, H, W) -> s1 (64c), p1 (64c)
-        
         self.encoder2 = Encoder(hidden_channel, hidden_channel*2) # 64 -> 128
-        # (B, 128, H, W) -> s2 (128c), p2 (128c)
-        
         self.encoder3 = Encoder(hidden_channel*2, hidden_channel*4) # 128 -> 256
-        # (B, 256, H, W) -> s3 (256c), p3 (256c)
-        
         self.encoder4 = Encoder(hidden_channel*4, hidden_channel*8) # 256 -> 512
-        # (B, 512, H, W) -> s4 (512c), p4 (512c)
 
-        # --- 병목 구간 (Bottleneck) ---
-        self.bottleneck = DoubleConv(hidden_channel*8, hidden_channel*16) # 512 -> 1024
+        self.double_conv = DoubleConv(hidden_channel*8, hidden_channel*16) # 512 -> 1024
         
-        # --- 확장 경로 (Decoder) ---
-        self.up1 = Decoder(hidden_channel*16, hidden_channel*8) # 1024 -> 512
-        self.up2 = Decoder(hidden_channel*8, hidden_channel*4) # 512 -> 256
-        self.up3 = Decoder(hidden_channel*4, hidden_channel*2) # 256 -> 128
-        self.up4 = Decoder(hidden_channel*2, hidden_channel) # 128 -> 64
+        # Expanding path
+        self.decoder1 = Decoder(hidden_channel*16, hidden_channel*8) # 1024 -> 512
+        self.decoder2 = Decoder(hidden_channel*8, hidden_channel*4) # 512 -> 256
+        self.decoder3 = Decoder(hidden_channel*4, hidden_channel*2) # 256 -> 128
+        self.decoder4 = Decoder(hidden_channel*2, hidden_channel) # 128 -> 64
 
-        # --- 최종 출력 (Output) ---
+        # 1x1 conv
         self.out_conv = nn.Conv2d(hidden_channel, out_channel, kernel_size=1)
 
     def forward(self, x):
-        # --- 수축 ---
-        s1, p1 = self.encoder1(x)  # s1: 64c, p1: 64c
-        s2, p2 = self.encoder2(p1) # s2: 128c, p2: 128c
-        s3, p3 = self.encoder3(p2) # s3: 256c, p3: 256c
-        s4, p4 = self.encoder4(p3) # s4: 512c, p4: 512c
+        double_conv_out1, pool_out1 = self.encoder1(x)          # double_conv_out1, pool_out1: 64C
+        double_conv_out2, pool_out2 = self.encoder2(pool_out1)  # double_conv_out2, pool_out2: 128C
+        double_conv_out3, pool_out3 = self.encoder3(pool_out2)  # double_conv_out3, pool_out3: 256C
+        double_conv_out4, pool_out4 = self.encoder4(pool_out3)  # double_conv_out4, pool_out4: 512C
 
-        # --- 병목 ---
-        b = self.bottleneck(p4)     # b: 1024c
+        double_conv_out5 = self.double_conv(pool_out4)
 
-        # --- 확장 & 스킵 연결 ---
-        x = self.up1(b, s4)   # (1024c, 512c) -> 512c
-        x = self.up2(x, s3)   # (512c, 256c) -> 256c
-        x = self.up3(x, s2)   # (256c, 128c) -> 128c
-        x = self.up4(x, s1)   # (128c, 64c) -> 64c
+        dec_out = self.decoder1(double_conv_out5, double_conv_out4)
+        dec_out = self.decoder2(dec_out, double_conv_out3)
+        dec_out = self.decoder3(dec_out, double_conv_out2)
+        dec_out = self.decoder4(dec_out, double_conv_out1)
 
-        # --- 최종 출력 ---
-        output = self.out_conv(x) # 64c -> out_channel (1c)
+        output = self.out_conv(dec_out)
         
         return output

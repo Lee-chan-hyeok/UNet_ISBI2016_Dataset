@@ -176,7 +176,7 @@ def main():
         transform=transforms(scale=cfg.aug_scale, angle=cfg.aug_angle, flip_prob=0.5),
         image_size=(572, 572),
         subset="train",
-        validation_cases=cfg.validation_cases,
+        validation_ratio=cfg.validation_ratio,
         seed=cfg.seed,
         sampling_fraction=cfg.sampling_fraction
     )
@@ -185,7 +185,7 @@ def main():
         transform=None,
         image_size=(572, 572),
         subset="validation",
-        validation_cases=cfg.validation_cases,
+        validation_ratio=cfg.validation_ratio,
         seed=cfg.seed,
         sampling_fraction=1.0
     )

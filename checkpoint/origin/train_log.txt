@@ -17,3 +17,6 @@
 2025-10-26 11:42:54,811 - ----- Save best.pt model !!! -----
 2025-10-26 11:47:34,585 - ----- Save best.pt model !!! -----
 2025-10-26 11:52:26,071 - Loss and Dice Score Greph is saved at checkpoint/origin/loss_dsc_graph.png!
+2025-10-27 12:00:53,482 - device: cpu
+2025-10-27 12:01:54,351 - device: cpu
+2025-10-27 14:46:13,122 - ----- Save best.pt model !!! -----

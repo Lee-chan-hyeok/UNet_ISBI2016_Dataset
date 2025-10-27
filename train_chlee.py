@@ -11,18 +11,17 @@ import config as config
 from unet import ChleeUNet
 from dataset import ISICDataset
 from transform import transforms
-# from loss import DiceLoss
+from loss import DiceLoss
 
 from utils import dsc
 
 
-def save_loss_dsc_graph(
+def save_loss_dsc_graph(    # (GPT)
         train_loss_list: list,
         valid_loss_list: list,
         train_dsc_list: list,
         valid_dsc_list: list,
         model_save_path: str,
-
     ):
     epochs = range(1, len(train_loss_list)+1)
 
@@ -62,23 +61,27 @@ def run_epoch(
         model: ChleeUNet,
         data_loader: dict,
         optimizer: torch.optim,
-        loss_fn: torch.nn.BCELoss,
+        # loss_fn: torch.nn.BCELoss,
+        loss_dict: dict,
         epoch: int,
         device,
+        cfg
     ):
 
+    dice_loss_fn, loss_fn = loss_dict["dice_loss"], loss_dict["bce_loss"]
     # ========================= train =========================
     model.train()
     train_loader = data_loader["train_loader"]
     
     train_epoch_loss = []
     train_epoch_dsc = []
-    for i, data in enumerate(tqdm(train_loader, desc=f"Epoch {epoch+1} Training")):
+    for i, data in enumerate(tqdm(train_loader, desc=f"Epoch [{epoch+1}/{cfg.epochs}] Training")):
         x, y_true = data
         x, y_true = x.to(device), y_true.to(device)
 
-        y_pred = model(x)
-        loss = loss_fn(y_pred, y_true)
+        y_pred = model(x)               # forward
+        loss = loss_fn(y_pred, y_true)  # BCE Loss func
+        # loss += dice_loss_fn(y_pred, y_true)    # BCE loss + Dice loss
         
         optimizer.zero_grad()
         loss.backward()
@@ -95,9 +98,9 @@ def run_epoch(
 
         train_epoch_dsc.append(batch_dsc)
 
-    mean_train_epoch_loss = np.mean(train_epoch_loss)   # 평균 train loss 값
-    mean_train_epoch_dsc = np.mean(train_epoch_dsc)
-    print(f"Epoch {epoch+1} | Train Loss: {mean_train_epoch_loss:.4f} | Train DSC: {mean_train_epoch_dsc:.4f}")
+    mean_train_epoch_loss = np.mean(train_epoch_loss)   # train loss 평균값
+    mean_train_epoch_dsc = np.mean(train_epoch_dsc)     # train dice score 평균값
+    print(f"Epoch [{epoch+1}/{cfg.epochs}] | Train Loss: {mean_train_epoch_loss:.4f} | Train DSC: {mean_train_epoch_dsc:.4f}")
 
     # ========================= valid =========================
     model.eval()
@@ -106,12 +109,13 @@ def run_epoch(
     valid_epoch_loss = []
     valid_epoch_dsc = []
     with torch.no_grad():
-        for i, data in enumerate(tqdm(valid_loader, desc=f"Epoch {epoch+1} Validate")):
+        for i, data in enumerate(tqdm(valid_loader, desc=f"Epoch [{epoch+1}/{cfg.epochs}] Validate")):
             x, y_true = data
             x, y_true = x.to(device), y_true.to(device)
 
             y_pred = model(x)
             loss = loss_fn(y_pred, y_true)
+            # loss += dice_loss_fn(y_pred, y_true)    # BCE loss + Dice loss
 
             valid_epoch_loss.append(loss.item())
 
@@ -124,9 +128,9 @@ def run_epoch(
 
             valid_epoch_dsc.append(batch_dsc)
 
-    mean_valid_epoch_loss = np.mean(valid_epoch_loss)
-    mean_valid_epoch_dsc = np.mean(valid_epoch_dsc)
-    print(f"Epoch {epoch+1} | Valid Loss: {mean_valid_epoch_loss:.4f} | Valid DSC: {mean_valid_epoch_dsc:.4f}")
+    mean_valid_epoch_loss = np.mean(valid_epoch_loss)   # valid loss 평균값
+    mean_valid_epoch_dsc = np.mean(valid_epoch_dsc)     # valid dice score 평균값
+    print(f"Epoch [{epoch+1}/{cfg.epochs}] | Valid Loss: {mean_valid_epoch_loss:.4f} | Valid DSC: {mean_valid_epoch_dsc:.4f}")
 
     loss_dict = {
         "train_loss": mean_train_epoch_loss,
@@ -147,7 +151,7 @@ def main():
     model_save_path = os.path.join("checkpoint", cfg.save_path)     # model_save_path = "checkpoint/origin"
     os.makedirs(model_save_path, exist_ok=True)
 
-    # ================ 로그 파일 + 화면 출력 설정 ================
+    # ================ 로그 파일 + 화면 출력 설정(GPT) ================
     logging.basicConfig(
     filename=os.path.join(model_save_path, "train_log.txt"),
     level=logging.INFO,
@@ -176,7 +180,7 @@ def main():
         transform=transforms(scale=cfg.aug_scale, angle=cfg.aug_angle, flip_prob=0.5),
         image_size=(572, 572),
         subset="train",
-        validation_cases=cfg.validation_cases,
+        validation_ratio=cfg.validation_ratio,
         seed=cfg.seed,
         sampling_fraction=cfg.sampling_fraction
     )
@@ -185,13 +189,10 @@ def main():
         transform=None,
         image_size=(572, 572),
         subset="validation",
-        validation_cases=cfg.validation_cases,
+        validation_ratio=cfg.validation_ratio,
         seed=cfg.seed,
         sampling_fraction=1.0
     )
-
-    def worker_init(worker_id):
-        np.random.seed(cfg.seed + worker_id)
 
     # loader 초기화
     train_loader = DataLoader(
@@ -200,14 +201,12 @@ def main():
         shuffle=True,
         drop_last=True,
         num_workers=cfg.workers,
-        worker_init_fn=worker_init
     )
     valid_loader = DataLoader(
         dataset=valid_dataset,
         batch_size=cfg.batch_size,
         drop_last=False,
         num_workers=cfg.workers,
-        worker_init_fn=worker_init
     )
 
     loader_dict = {
@@ -217,9 +216,13 @@ def main():
 
     # optimizer, loss 초기화
     optimizer = torch.optim.Adam(params=model.parameters(), lr=cfg.lr)
-    # loss_fn = DiceLoss()
-    # loss_fn = torch.nn.BCELoss()
+    dice_loss_fn = DiceLoss()
     loss_fn = torch.nn.BCEWithLogitsLoss()
+    
+    loss_dict = {
+        "dice_loss": dice_loss_fn,
+        "bce_loss": loss_fn
+    }
 
     best_validation_dsc = 0.0
     
@@ -234,9 +237,10 @@ def main():
             model,
             loader_dict,
             optimizer,
-            loss_fn,
+            loss_dict,
             epoch,
             device,
+            cfg
         )
 
         current_lr = optimizer.param_groups[0]['lr']
@@ -259,7 +263,7 @@ def main():
                 logging.info(f"----- Early Stopping !!! -----")
                 break
 
-        if (epoch+1) % 5 == 0:
+        if (epoch+1) % 5 == 0:  # 5에폭마다 graph 저장
             save_loss_dsc_graph(train_loss_list, valid_loss_list, train_dsc_list, valid_dsc_list, model_save_path)
 
     save_loss_dsc_graph(train_loss_list, valid_loss_list, train_dsc_list, valid_dsc_list, model_save_path)

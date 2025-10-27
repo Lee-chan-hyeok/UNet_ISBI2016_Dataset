@@ -35,7 +35,7 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         double_conv_out = self.double_conv(x)  # skip connection꺼
-        pool_out = self.pool(double_conv)
+        pool_out = self.pool(double_conv_out)
         return double_conv_out, pool_out
 
 
